@@ -502,6 +502,127 @@
     background: var(--tea-200);
   }
 
+  /* ---- Guestbook ---- */
+  .gb-form {
+    background: #fff;
+    border-radius: 20px;
+    padding: 28px 30px;
+    box-shadow: 0 12px 34px rgba(var(--shadow), 0.12);
+    border: 1px solid var(--tea-100);
+    margin-bottom: 34px;
+  }
+
+  .gb-row {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+
+  .gb-field {
+    flex: 1;
+    min-width: 200px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .gb-field label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--tea-600);
+  }
+
+  .gb-field input,
+  .gb-field textarea {
+    font-family: inherit;
+    font-size: 0.95rem;
+    color: var(--tea-ink);
+    background: var(--tea-50);
+    border: 2px solid var(--tea-100);
+    border-radius: 12px;
+    padding: 11px 14px;
+    resize: vertical;
+    transition: border-color 0.2s ease, background 0.2s ease;
+  }
+
+  .gb-field input:focus,
+  .gb-field textarea:focus {
+    outline: none;
+    border-color: var(--tea-400);
+    background: #fff;
+  }
+
+  .gb-honey {
+    position: absolute;
+    left: -9999px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+  }
+
+  .gb-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+
+  .gb-note {
+    font-size: 0.86rem;
+    min-height: 1.2em;
+  }
+
+  .gb-note.err { color: #b0483c; }
+  .gb-note.ok { color: var(--tea-600); }
+
+  .gb-list {
+    display: grid;
+    gap: 14px;
+  }
+
+  .gb-item {
+    background: #fff;
+    border-radius: 16px;
+    padding: 18px 22px;
+    border: 1px solid var(--tea-100);
+    border-left: 4px solid var(--tea-300);
+    box-shadow: 0 6px 18px rgba(var(--shadow), 0.07);
+  }
+
+  .gb-item-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 6px;
+  }
+
+  .gb-item-head b {
+    color: var(--tea-600);
+    font-size: 0.98rem;
+  }
+
+  .gb-item-head time {
+    font-size: 0.75rem;
+    opacity: 0.55;
+    white-space: nowrap;
+  }
+
+  .gb-item p {
+    font-size: 0.94rem;
+    opacity: 0.88;
+    overflow-wrap: anywhere;
+  }
+
+  .gb-empty {
+    text-align: center;
+    padding: 34px 20px;
+    opacity: 0.6;
+    font-size: 0.92rem;
+  }
+
   footer {
     text-align: center;
     padding: 30px 6%;
@@ -1001,6 +1122,42 @@
   </blockquote>
 </section>
 
+<section id="guestbook" class="alt-bg">
+  <div class="section-inner">
+    <div class="section-title">
+      <span class="tag">Guestbook</span>
+      <h2>訪客留言板</h2>
+    </div>
+
+    <form class="gb-form" id="gbForm" autocomplete="off">
+      <div class="gb-row">
+        <div class="gb-field">
+          <label for="gbName">你的名字</label>
+          <input id="gbName" name="name" type="text" maxlength="20" placeholder="怎麼稱呼你？" required>
+        </div>
+      </div>
+      <div class="gb-row">
+        <div class="gb-field">
+          <label for="gbMessage">想說的一句話</label>
+          <textarea id="gbMessage" name="message" rows="3" maxlength="200" placeholder="留下一句話吧" required></textarea>
+        </div>
+      </div>
+      <div class="gb-honey" aria-hidden="true">
+        <label for="gbWebsite">Website</label>
+        <input id="gbWebsite" name="website" type="text" tabindex="-1" autocomplete="off">
+      </div>
+      <div class="gb-actions">
+        <button type="submit" class="btn btn-primary" id="gbSubmit">送出留言</button>
+        <span class="gb-note" id="gbNote" role="status" aria-live="polite"></span>
+      </div>
+    </form>
+
+    <div class="gb-list" id="gbList">
+      <div class="gb-empty">載入中…</div>
+    </div>
+  </div>
+</section>
+
 <section id="contact">
   <div class="section-inner">
     <div class="contact-box">
@@ -1265,6 +1422,130 @@
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && panel.classList.contains('open')) closeQuiz();
   });
+})();
+</script>
+
+<script>
+/* ---------------- Guestbook ---------------- */
+(function () {
+  var form = document.getElementById('gbForm');
+  var list = document.getElementById('gbList');
+  var note = document.getElementById('gbNote');
+  var submit = document.getElementById('gbSubmit');
+  if (!form) return;
+
+  function say(text, kind) {
+    note.textContent = text;
+    note.className = 'gb-note' + (kind ? ' ' + kind : '');
+  }
+
+  function formatTime(iso) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    var pad = function (n) { return n < 10 ? '0' + n : '' + n; };
+    return d.getFullYear() + '/' + pad(d.getMonth() + 1) + '/' + pad(d.getDate()) +
+           ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+
+  /* 全程使用 textContent，訪客輸入永遠不會被當成 HTML 解析 */
+  function itemEl(m) {
+    var wrap = document.createElement('div');
+    wrap.className = 'gb-item';
+
+    var head = document.createElement('div');
+    head.className = 'gb-item-head';
+
+    var who = document.createElement('b');
+    who.textContent = m.name;
+
+    var when = document.createElement('time');
+    when.dateTime = m.created_at;
+    when.textContent = formatTime(m.created_at);
+
+    head.appendChild(who);
+    head.appendChild(when);
+
+    var body = document.createElement('p');
+    body.textContent = m.message;
+
+    wrap.appendChild(head);
+    wrap.appendChild(body);
+    return wrap;
+  }
+
+  function render(messages) {
+    list.innerHTML = '';
+    if (!messages.length) {
+      var empty = document.createElement('div');
+      empty.className = 'gb-empty';
+      empty.textContent = '還沒有人留言，成為第一個吧 ✨';
+      list.appendChild(empty);
+      return;
+    }
+    messages.forEach(function (m) { list.appendChild(itemEl(m)); });
+  }
+
+  function load() {
+    fetch('/api/messages', { headers: { 'Accept': 'application/json' } })
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function (data) { render(data.messages || []); })
+      .catch(function () {
+        list.innerHTML = '';
+        var e = document.createElement('div');
+        e.className = 'gb-empty';
+        e.textContent = '留言板暫時無法載入，請稍後再試。';
+        list.appendChild(e);
+      });
+  }
+
+  var ERRORS = {
+    empty: '名字和留言都要填寫喔。',
+    rate_limited: '留言太頻繁了，請稍後再試。',
+    invalid_json: '送出格式有誤，請重新整理後再試。',
+    bad_request: '送出格式有誤，請重新整理後再試。'
+  };
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var name = form.name.value.trim();
+    var message = form.message.value.trim();
+    if (!name || !message) {
+      say(ERRORS.empty, 'err');
+      return;
+    }
+
+    submit.disabled = true;
+    say('送出中…');
+
+    fetch('/api/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name, message: message, website: form.website.value })
+    })
+      .then(function (r) {
+        return r.json().then(function (data) { return { ok: r.ok, data: data }; });
+      })
+      .then(function (res) {
+        if (!res.ok) {
+          say(ERRORS[res.data && res.data.error] || '送出失敗，請稍後再試。', 'err');
+          return;
+        }
+        form.reset();
+        say('留言成功，謝謝你 💗', 'ok');
+        load();
+      })
+      .catch(function () {
+        say('連線失敗，請確認網路後再試。', 'err');
+      })
+      .then(function () {
+        submit.disabled = false;
+      });
+  });
+
+  load();
 })();
 </script>
 
