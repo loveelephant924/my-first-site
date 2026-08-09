@@ -1,0 +1,8 @@
+# macOS
+.DS_Store
+
+# 原始高解析度照片（18MB，網頁不需要，已內嵌於 index.html）
+黃大象.jpg
+
+# 本機除錯用截圖
+預覽截圖.png
