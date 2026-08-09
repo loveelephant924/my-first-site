@@ -2,6 +2,8 @@
 
 黃大象 — Doula・身心靈健康分享 個人自我介紹網頁。
 
+🌐 **線上網址：** https://loveelephant924.github.io/my-first-site/
+
 ## 內容
 
 單頁式靜態網站，莫蘭迪奶茶杏色系設計，包含：
@@ -25,4 +27,5 @@
 
 ## 部署
 
-靜態網站，將 repo 連接至任何靜態主機（Zeabur / Netlify / Vercel / GitHub Pages）即可，無需建置步驟。
+由 GitHub Pages 從 `main` 分支根目錄直接提供服務，無需建置步驟。
+推送到 `main` 後約一分鐘內自動更新上線。
