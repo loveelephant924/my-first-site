@@ -1129,7 +1129,7 @@
       <h2>訪客留言板</h2>
     </div>
 
-    <form class="gb-form" id="gbForm" autocomplete="off">
+    <form class="gb-form" id="gbForm" autocomplete="off" hidden>
       <div class="gb-row">
         <div class="gb-field">
           <label for="gbName">你的名字</label>
@@ -1491,12 +1491,17 @@
         if (!r.ok) throw new Error('HTTP ' + r.status);
         return r.json();
       })
-      .then(function (data) { render(data.messages || []); })
+      .then(function (data) {
+        form.hidden = false;
+        render(data.messages || []);
+      })
       .catch(function () {
+        /* 靜態主機沒有後端 API，隱藏表單以免訪客送出後才發現失敗 */
+        form.hidden = true;
         list.innerHTML = '';
         var e = document.createElement('div');
         e.className = 'gb-empty';
-        e.textContent = '留言板暫時無法載入，請稍後再試。';
+        e.textContent = '留言板準備中，敬請期待 ✨';
         list.appendChild(e);
       });
   }
