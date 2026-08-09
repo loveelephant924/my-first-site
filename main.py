@@ -9,6 +9,7 @@
   DB_PATH     SQLite 檔案位置，預設 ./data/guestbook.db
 """
 
+import hashlib
 import json
 import os
 import re
@@ -22,6 +23,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.environ.get("DB_PATH", os.path.join(BASE_DIR, "data", "guestbook.db"))
 PORT = int(os.environ.get("PORT", "8080"))
+IP_SALT = os.environ.get("IP_SALT", "wellness-coaching")
 
 # 留言限制
 NAME_MAX = 20
@@ -55,9 +57,14 @@ def init_db():
                 id         INTEGER PRIMARY KEY AUTOINCREMENT,
                 name       TEXT NOT NULL,
                 message    TEXT NOT NULL,
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                ip_hash    TEXT
             )
             """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_messages_rate"
+            " ON messages (ip_hash, created_at)"
         )
         conn.commit()
     print("[db] ready at %s" % DB_PATH, flush=True)
@@ -104,12 +111,22 @@ def list_messages():
     return [dict(r) for r in rows]
 
 
-def add_message(name, message):
-    created = datetime.now(timezone.utc).isoformat(timespec="seconds")
+def utc_now():
+    """與 Cloudflare Function 的 Date.toISOString() 對齊，確保時間字串可直接比較。"""
+    return (
+        datetime.now(timezone.utc)
+        .isoformat(timespec="milliseconds")
+        .replace("+00:00", "Z")
+    )
+
+
+def add_message(name, message, ip_hash):
+    created = utc_now()
     with connect() as conn:
         cur = conn.execute(
-            "INSERT INTO messages (name, message, created_at) VALUES (?, ?, ?)",
-            (name, message, created),
+            "INSERT INTO messages (name, message, created_at, ip_hash)"
+            " VALUES (?, ?, ?, ?)",
+            (name, message, created, ip_hash),
         )
         conn.commit()
         new_id = cur.lastrowid
@@ -209,8 +226,12 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(429, {"error": "rate_limited"})
             return
 
+        ip_hash = hashlib.sha256(
+            ("%s:%s" % (IP_SALT, self.client_ip())).encode("utf-8")
+        ).hexdigest()
+
         try:
-            created = add_message(name, message)
+            created = add_message(name, message, ip_hash)
         except Exception as exc:  # noqa: BLE001
             print("[error] insert: %r" % exc, flush=True)
             self.send_json(500, {"error": "server_error"})
